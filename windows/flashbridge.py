@@ -24,7 +24,7 @@ APP_DIR = Path(os.getenv("APPDATA", str(Path.home()))) / "FlashBridge"
 CONFIG_PATH = APP_DIR / "config.json"
 BUF = 256 * 1024
 MAX_FILE = 1 << 45
-VERSION = (0, 1, 1)
+VERSION = (0, 1, 2)
 UPDATE_MANIFEST = "https://github.com/AbhayShah06/FlashBridge/releases/latest/download/update.json"
 
 
@@ -54,6 +54,51 @@ def file_hash(path):
         while chunk := source.read(BUF):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def add_files(paths, folder, progress, lock):
+    """Copy a selected batch into the shared folder without replacing finished files."""
+    added = skipped = failed = 0
+    last_error = ""
+    for index, selected in enumerate(paths, 1):
+        source = Path(selected)
+        temporary = None
+        try:
+            size = source.stat().st_size
+            temp_dir = folder / ".flashbridge-partials"
+            temp_dir.mkdir(exist_ok=True)
+            temporary = temp_dir / (secrets.token_hex(16) + ".part")
+            digest = hashlib.sha256()
+            done, last = 0, -1
+            last_update = 0.0
+            with keep_awake(), source.open("rb") as input_file, temporary.open("xb") as output:
+                while chunk := input_file.read(BUF):
+                    output.write(chunk)
+                    digest.update(chunk)
+                    done += len(chunk)
+                    percent = int(done * 100 / size) if size else 100
+                    now = time.monotonic()
+                    if percent != last and (now - last_update >= .2 or percent == 100):
+                        last = percent
+                        last_update = now
+                        progress(f"Adding {index}/{len(paths)}: {source.name}… {percent}%")
+                output.flush()
+                os.fsync(output.fileno())
+            with lock:
+                existing = folder / source.name
+                if existing.is_file() and existing.stat().st_size == size and file_hash(existing) == digest.hexdigest():
+                    skipped += 1
+                    continue
+                destination = unique_path(folder, source.name)
+                temporary.rename(destination)
+                added += 1
+        except OSError as error:
+            failed += 1
+            last_error = str(error)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+    return added, skipped, failed, last_error
 
 
 def check_update():
@@ -325,20 +370,45 @@ def main():
         root.iconbitmap(default=str(icon))
     events = queue.Queue()
     root.title("FlashBridge")
-    root.geometry("510x390")
-    root.minsize(460, 300)
-    frame = ttk.Frame(root, padding=20)
+    root.geometry("550x500")
+    root.minsize(490, 420)
+    root.configure(bg="#111214")
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    style.configure("TFrame", background="#111214")
+    style.configure("Card.TFrame", background="#1D1F22")
+    style.configure("TLabel", background="#111214", foreground="#F4F5F2", font=("Segoe UI", 10))
+    style.configure("Card.TLabel", background="#1D1F22", foreground="#F4F5F2", font=("Segoe UI", 10))
+    style.configure("Muted.TLabel", background="#111214", foreground="#A7ABB0", font=("Segoe UI", 10))
+    style.configure("CardMuted.TLabel", background="#1D1F22", foreground="#A7ABB0", font=("Segoe UI", 10))
+    style.configure("Eyebrow.TLabel", background="#111214", foreground="#BEF264", font=("Segoe UI", 9, "bold"))
+    style.configure("Section.TLabel", background="#1D1F22", foreground="#BEF264", font=("Segoe UI", 9, "bold"))
+    style.configure("Title.TLabel", background="#111214", foreground="#F4F5F2", font=("Segoe UI", 23, "bold"))
+    style.configure("Code.TLabel", background="#1D1F22", foreground="#BEF264", font=("Segoe UI", 27, "bold"))
+    style.configure("TButton", background="#BEF264", foreground="#111214", borderwidth=0, padding=(14, 10), font=("Segoe UI", 10, "bold"))
+    style.map("TButton", background=[("active", "#D5FC90"), ("disabled", "#50584B")])
+    style.configure("Secondary.TButton", background="#2B2E31", foreground="#F4F5F2")
+    style.map("Secondary.TButton", background=[("active", "#3A3E42")])
+    frame = ttk.Frame(root, padding=22)
     frame.pack(fill="both", expand=True)
-    ttk.Label(frame, text="FlashBridge", font=("Segoe UI", 20, "bold")).pack(anchor="w")
-    ttk.Label(frame, text="Android ↔ Windows · local file transfer").pack(anchor="w", pady=(0, 18))
+    ttk.Label(frame, text="LOCAL TRANSFER", style="Eyebrow.TLabel").pack(anchor="w")
+    ttk.Label(frame, text="FlashBridge", style="Title.TLabel").pack(anchor="w")
+    ttk.Label(frame, text="Your files, straight between devices.", style="Muted.TLabel").pack(anchor="w")
     update_label = ttk.Label(frame, text="")
     update_button = ttk.Button(frame, text="Update now")
     update_data = [None]
-    ttk.Label(frame, text="Pairing code", font=("Segoe UI", 10, "bold")).pack(anchor="w")
-    ttk.Label(frame, text=state.pin, font=("Segoe UI", 26, "bold")).pack(anchor="w")
-    ttk.Label(frame, text=f"PC address: {addresses()}  ·  port {PORT}").pack(anchor="w", pady=(0, 12))
+    connection_card = ttk.Frame(frame, style="Card.TFrame", padding=16)
+    connection_card.pack(fill="x", pady=(18, 8))
+    ttk.Label(connection_card, text="CONNECTION", style="Section.TLabel").pack(anchor="w")
+    ttk.Label(connection_card, text="Pairing code", style="CardMuted.TLabel").pack(anchor="w", pady=(7, 0))
+    ttk.Label(connection_card, text=state.pin, style="Code.TLabel").pack(anchor="w")
+    address_text = StringVar(value=f"PC address: {addresses()}  ·  port {PORT}")
+    ttk.Label(connection_card, textvariable=address_text, style="CardMuted.TLabel").pack(anchor="w")
+    files_card = ttk.Frame(frame, style="Card.TFrame", padding=16)
+    files_card.pack(fill="x", pady=(8, 8))
+    ttk.Label(files_card, text="FILES", style="Section.TLabel").pack(anchor="w")
     folder_text = StringVar(value=f"Folder: {state.folder}")
-    folder_text_label = ttk.Label(frame, textvariable=folder_text, wraplength=460)
+    folder_text_label = ttk.Label(files_card, textvariable=folder_text, style="CardMuted.TLabel", wraplength=460)
     folder_text_label.pack(anchor="w")
 
     def choose_folder():
@@ -350,51 +420,24 @@ def main():
             folder_text.set(f"Folder: {state.folder}")
 
     def add_file():
-        chosen = filedialog.askopenfilename(title="Make file available to Android")
+        chosen = filedialog.askopenfilenames(title="Choose files for Android")
         if chosen:
-            source = Path(chosen)
             folder = state.folder
             def copy_selected():
-                temporary = None
-                try:
-                    size = source.stat().st_size
-                    temp_dir = folder / ".flashbridge-partials"
-                    temp_dir.mkdir(exist_ok=True)
-                    temporary = temp_dir / (secrets.token_hex(16) + ".part")
-                    digest = hashlib.sha256()
-                    done, last = 0, -1
-                    with keep_awake(), source.open("rb") as input_file, temporary.open("xb") as output:
-                        while chunk := input_file.read(BUF):
-                            output.write(chunk)
-                            digest.update(chunk)
-                            done += len(chunk)
-                            percent = int(done * 100 / size) if size else 100
-                            if percent != last:
-                                last = percent
-                                events.put(f"Adding {source.name}… {percent}%")
-                        output.flush()
-                        os.fsync(output.fileno())
-                    with state.lock:
-                        existing = folder / source.name
-                        if existing.is_file() and existing.stat().st_size == size and file_hash(existing) == digest.hexdigest():
-                            events.put(("ready", f"{source.name} is already available to Android."))
-                            return
-                        destination = unique_path(folder, source.name)
-                        temporary.rename(destination)
-                    events.put(("ready", f"Added {destination.name}. On Android, tap Get from PC."))
-                except OSError as error:
-                    events.put(("error", f"Could not add file: {error}"))
-                finally:
-                    if temporary is not None:
-                        temporary.unlink(missing_ok=True)
+                added, skipped, failed, last_error = add_files(chosen, folder, events.put, state.lock)
+                events.put(f"Ready for Android: {added} added, {skipped} already there, {failed} failed."
+                           + (f" Last error: {last_error}" if failed else " Tap Get from PC on Android."))
             threading.Thread(target=copy_selected, daemon=True).start()
 
-    row = ttk.Frame(frame)
+    row = ttk.Frame(files_card, style="Card.TFrame")
     row.pack(anchor="w", pady=12)
-    ttk.Button(row, text="Choose folder", command=choose_folder).pack(side="left", padx=(0, 8))
-    ttk.Button(row, text="Add file to folder", command=add_file).pack(side="left")
+    ttk.Button(row, text="Choose folder", style="Secondary.TButton", command=choose_folder).pack(side="left", padx=(0, 8))
+    ttk.Button(row, text="Add files to folder", command=add_file).pack(side="left")
     status = StringVar(value="Waiting for Android. Keep this app open during transfers.")
-    ttk.Label(frame, textvariable=status, wraplength=460).pack(anchor="w", pady=(8, 0))
+    progress_card = ttk.Frame(frame, style="Card.TFrame", padding=16)
+    progress_card.pack(fill="x", pady=(8, 0))
+    ttk.Label(progress_card, text="TRANSFER", style="Section.TLabel").pack(anchor="w")
+    ttk.Label(progress_card, textvariable=status, style="Card.TLabel", wraplength=460).pack(anchor="w", pady=(5, 0))
     state.on_event = events.put
 
     def install_update():
@@ -417,8 +460,8 @@ def main():
             if isinstance(event, tuple) and event[0] == "update":
                 update_data[0] = event[1]
                 update_label.configure(text=f"Update {event[1]['versionName']} available")
-                update_label.pack(anchor="w", before=folder_text_label)
-                update_button.pack(anchor="w", before=folder_text_label)
+                update_label.pack(anchor="w", before=connection_card)
+                update_button.pack(anchor="w", before=connection_card)
             elif isinstance(event, tuple) and event[0] == "install":
                 try:
                     subprocess.Popen([event[1]], cwd=str(Path(event[1]).parent))
@@ -438,6 +481,12 @@ def main():
         root.after(200, show_events)
 
     root.after(200, show_events)
+
+    def refresh_address():
+        address_text.set(f"PC address: {addresses()}  ·  port {PORT}")
+        root.after(2500, refresh_address)
+
+    root.after(2500, refresh_address)
 
     def look_for_update():
         try:

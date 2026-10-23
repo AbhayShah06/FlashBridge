@@ -46,7 +46,7 @@ jobs:
           python-version: '3.12'
       - name: Test transfers
         run: python -m unittest discover -s tests -v
-      - name: Build portable EXE
+      - name: Build Windows app for installer
         shell: pwsh
         run: |
           python -m pip install --upgrade pip pyinstaller==6.16.0

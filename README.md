@@ -12,7 +12,7 @@ Small, local Android ↔ Windows file transfer. Files stay on the local connecti
 4. Allow FlashBridge through Windows Firewall for **private networks** if Windows asks.
 5. The Android app finds the Windows app automatically. Enter the six-digit code shown on Windows once.
 
-On Android, **Send file** picks any file and sends it to the Windows receive folder. **Get from PC** lists files in the Windows receive folder and saves the chosen file to the Android receive folder. On Windows, **Add file to folder** makes a file available for Android to fetch. Both directions use the same private local connection. The Android transfer continues with the screen off and shows progress in a notification.
+On Android, **Send files to PC** selects multiple files and sends them one by one to the Windows receive folder. **Get files from PC** lets you select multiple files in the Windows receive folder and saves them to the Android receive folder. On Windows, **Add files to folder** selects multiple files for Android to fetch. A batch shows the current file and its progress in a notification, including when the phone screen is off. If the link drops, the app tries the current file again after reconnecting; it does not resume partial bytes.
 
 The Windows installer includes an uninstaller in **Windows Settings → Installed apps → FlashBridge → Uninstall**. Uninstalling the program leaves your transfer folder and files alone. The installer is per-user and does not modify system power or firewall settings.
 

@@ -10,7 +10,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
-from windows.flashbridge import Handler, safe_name, unique_path
+from windows.flashbridge import Handler, add_files, safe_name, unique_path
 
 
 class TransferTest(unittest.TestCase):
@@ -95,6 +95,21 @@ class TransferTest(unittest.TestCase):
         status, body = self.request("GET", "/v1/files")
         self.assertEqual(status, 503)
         self.assertIn("receive folder is unavailable", json.loads(body)["error"])
+
+    def test_sixty_file_batch_and_repeat_skip(self):
+        sources = self.folder / "sources"
+        sources.mkdir()
+        paths = []
+        for index in range(60):
+            source = sources / f"item-{index:02}.bin"
+            source.write_bytes(bytes([index]) * 4096)
+            paths.append(source)
+        messages = []
+        self.assertEqual(add_files(paths, self.folder, messages.append, threading.Lock())[:3], (60, 0, 0))
+        self.assertEqual(add_files(paths, self.folder, messages.append, threading.Lock())[:3], (0, 60, 0))
+        self.assertEqual((self.folder / "item-59.bin").read_bytes(), bytes([59]) * 4096)
+        self.assertEqual(len(list(self.folder.glob("item-*.bin"))), 60)
+        self.assertTrue(any("60/60" in message for message in messages))
 
 
 if __name__ == "__main__":

@@ -17,11 +17,14 @@ import android.provider.OpenableColumns;
 import androidx.documentfile.provider.DocumentFile;
 import org.json.JSONObject;
 import java.io.InputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Keeps the transfer alive after the screen locks; never overwrites an existing file. */
@@ -34,6 +37,7 @@ public class TransferService extends Service {
     private static final AtomicBoolean BUSY = new AtomicBoolean(false);
     private SharedPreferences prefs;
     private NotificationManager notifications;
+    private String progressPrefix = "";
 
     @Override public void onCreate() {
         super.onCreate();
@@ -47,23 +51,24 @@ public class TransferService extends Service {
             stopSelf(startId);
             return START_NOT_STICKY;
         }
-        if (!BUSY.compareAndSet(false, true)) return START_NOT_STICKY;
+        if (!BUSY.compareAndSet(false, true)) {
+            prefs.edit().putString("status", "A transfer batch is already running. Wait for it to finish.").apply();
+            return START_NOT_STICKY;
+        }
         startForeground(NOTIFICATION_ID, notification("Starting transfer…"));
         new Thread(() -> {
             PowerManager.WakeLock wake = null;
             WifiManager.WifiLock wifi = null;
             try {
                 wake = getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FlashBridge:Transfer");
-                wake.acquire(30 * 60 * 1000L);
+                wake.acquire();
                 WifiManager wifiManager = getSystemService(WifiManager.class);
                 if (wifiManager != null) {
                     wifi = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "FlashBridge:Transfer");
                     wifi.setReferenceCounted(false);
                     wifi.acquire();
                 }
-                if (SEND.equals(intent.getAction())) upload(intent.getData());
-                else if (RECEIVE.equals(intent.getAction())) download(intent.getStringExtra("name"));
-                else throw new Exception("Unknown transfer action");
+                runBatch(intent);
             } catch (Exception e) { update("Transfer failed: " + e.getMessage()); }
             finally {
                 if (wifi != null && wifi.isHeld()) wifi.release();
@@ -84,8 +89,84 @@ public class TransferService extends Service {
     }
 
     private void update(String message) {
-        prefs.edit().putString("status", message).apply();
-        notifications.notify(NOTIFICATION_ID, notification(message));
+        String shown = progressPrefix + message;
+        prefs.edit().putString("status", shown).apply();
+        notifications.notify(NOTIFICATION_ID, notification(shown));
+    }
+
+    private void resolveHost() throws Exception {
+        boolean unauthorized = false;
+        for (int round = 0; round < 3; round++) {
+            LinkedHashSet<String> candidates = new LinkedHashSet<>();
+            candidates.add(prefs.getString("discovered_host", ""));
+            candidates.add(prefs.getString("host", ""));
+            for (String host : candidates) {
+                if (host.isEmpty()) continue;
+                HttpURLConnection c = null;
+                try {
+                    c = (HttpURLConnection) new URL("http://" + host + ":" + PORT + "/v1/files").openConnection();
+                    c.setConnectTimeout(3000);
+                    c.setReadTimeout(3000);
+                    c.setRequestProperty("X-FlashBridge-Token", prefs.getString("token", ""));
+                    int code = c.getResponseCode();
+                    if (code == 200) {
+                        prefs.edit().putString("host", host).apply();
+                        return;
+                    }
+                    if (code == 401) unauthorized = true;
+                } catch (IOException ignored) { /* Try the other address or wait for the link. */ }
+                finally { if (c != null) c.disconnect(); }
+            }
+            if (round < 2) Thread.sleep((round + 1) * 1000L);
+        }
+        if (unauthorized) throw new Exception("PC found, but pairing expired. Pair with Windows again.");
+        throw new IOException("Cannot reach PC. Connect laptop to phone hotspot, then Pair with Windows using its new PC address.");
+    }
+
+    private void runBatch(Intent intent) throws Exception {
+        boolean sending = SEND.equals(intent.getAction());
+        if (!sending && !RECEIVE.equals(intent.getAction())) throw new Exception("Unknown transfer action");
+        ArrayList<Uri> uris = sending ? intent.getParcelableArrayListExtra("uris") : null;
+        ArrayList<String> names = sending ? null : intent.getStringArrayListExtra("names");
+        if (sending && (uris == null || uris.isEmpty())) {
+            uris = new ArrayList<>();
+            if (intent.getData() != null) uris.add(intent.getData());
+        }
+        if (!sending && (names == null || names.isEmpty())) {
+            names = new ArrayList<>();
+            if (intent.getStringExtra("name") != null) names.add(intent.getStringExtra("name"));
+        }
+        int total = sending ? uris.size() : names.size();
+        if (total == 0) throw new Exception("No files selected");
+        update("Connecting to PC…");
+        resolveHost();
+        int completed = 0, failed = 0;
+        String lastError = "";
+        for (int i = 0; i < total; i++) {
+            progressPrefix = (i + 1) + "/" + total + " · ";
+            try {
+                if (sending) upload(uris.get(i)); else download(names.get(i));
+                completed++;
+            } catch (IOException firstError) {
+                update("Link interrupted; reconnecting…");
+                try {
+                    resolveHost();
+                    if (sending) upload(uris.get(i)); else download(names.get(i));
+                    completed++;
+                } catch (Exception retryError) {
+                    failed++;
+                    lastError = retryError.getMessage();
+                    if (retryError instanceof IOException) break;
+                }
+            } catch (Exception error) {
+                failed++;
+                lastError = error.getMessage();
+            }
+        }
+        progressPrefix = "";
+        int pending = total - completed - failed;
+        update("Finished " + completed + "/" + total + " files" + (failed > 0 ? "; " + failed + " failed: " + lastError : "")
+                + (pending > 0 ? "; " + pending + " pending. Retry after reconnecting." : ""));
     }
 
     private HttpURLConnection connection(String path, String method) throws Exception {

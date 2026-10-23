@@ -3,6 +3,8 @@ package com.abhayshah.flashbridge;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Environment;
 import android.provider.Settings;
 import android.view.View;
@@ -42,9 +44,16 @@ final class UpdateManager {
         TextView notice = new TextView(activity);
         notice.setText("Update " + manifest.optString("versionName") + " available");
         notice.setTextSize(16);
+        notice.setTextColor(Color.rgb(244, 245, 242));
         notice.setPadding(0, 16, 0, 4);
         Button update = new Button(activity);
         update.setText("Update now");
+        update.setAllCaps(false);
+        update.setTextColor(Color.rgb(17, 18, 20));
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.rgb(190, 242, 100));
+        background.setCornerRadius(16 * activity.getResources().getDisplayMetrics().density);
+        update.setBackground(background);
         update.setOnClickListener(v -> {
             if (!activity.getPackageManager().canRequestPackageInstalls()) {
                 pendingPermission = manifest;
@@ -52,8 +61,8 @@ final class UpdateManager {
                 Toast.makeText(activity, "Allow installs for FlashBridge; download will continue when you return.", Toast.LENGTH_LONG).show();
             } else downloadAndInstall(activity, update, manifest);
         });
-        parent.addView(notice, 2);
-        parent.addView(update, 3);
+        parent.addView(notice, 1);
+        parent.addView(update, 2);
     }
 
     static void onResume(Activity activity) {
