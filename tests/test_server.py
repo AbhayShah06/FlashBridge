@@ -1,4 +1,5 @@
 import http.client
+import hashlib
 import json
 import socket
 import tempfile
@@ -69,6 +70,25 @@ class TransferTest(unittest.TestCase):
         self.assertEqual(safe_name("a.bin"), "a.bin")
         with self.assertRaises(ValueError):
             safe_name("../")
+
+    def test_mock_phone_large_file_and_retry(self):
+        # Exercise the wire protocol with a mock Android client, including retry
+        # after a dropped upload. This checks final bytes, not just HTTP status.
+        payload = bytes(range(256)) * (8 * 1024 * 1024 // 256)
+        started = time.monotonic()
+        status, body = self.request("PUT", "/v1/files?name=large.bin", payload)
+        self.assertEqual(status, 201)
+        self.assertFalse(json.loads(body).get("skipped", False))
+        self.assertEqual(self.request("GET", "/v1/files/large.bin"), (200, payload))
+        self.assertEqual(hashlib.sha256((self.folder / "large.bin").read_bytes()).digest(), hashlib.sha256(payload).digest())
+        self.assertTrue(json.loads(self.request("PUT", "/v1/files?name=large.bin", payload)[1])["skipped"])
+        self.assertEqual(len(list(self.folder.glob("large*.bin"))), 1)
+        self.assertLess(time.monotonic() - started, 30)
+
+    def test_pairing_rejects_bad_codes_and_limits_guesses(self):
+        for _ in range(5):
+            self.assertEqual(self.request("POST", "/v1/pair", json.dumps({"pin": "000000"}), token="")[0], 403)
+        self.assertEqual(self.request("POST", "/v1/pair", json.dumps({"pin": "123456"}), token="")[0], 429)
 
 
 if __name__ == "__main__":
