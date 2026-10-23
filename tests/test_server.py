@@ -90,6 +90,12 @@ class TransferTest(unittest.TestCase):
             self.assertEqual(self.request("POST", "/v1/pair", json.dumps({"pin": "000000"}), token="")[0], 403)
         self.assertEqual(self.request("POST", "/v1/pair", json.dumps({"pin": "123456"}), token="")[0], 429)
 
+    def test_missing_receive_folder_reports_error(self):
+        self.folder.rmdir()
+        status, body = self.request("GET", "/v1/files")
+        self.assertEqual(status, 503)
+        self.assertIn("receive folder is unavailable", json.loads(body)["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

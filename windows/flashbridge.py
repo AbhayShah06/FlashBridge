@@ -185,7 +185,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urllib.parse.urlsplit(self.path).path
         if path == "/v1/files":
-            files = [{"name": p.name, "size": p.stat().st_size} for p in self.state.folder.iterdir() if p.is_file() and not p.name.startswith(".")]
+            folder = self.state.folder
+            if not folder.is_dir():
+                return self.respond(503, {"error": "PC receive folder is unavailable; choose another folder in FlashBridge"})
+            try:
+                files = [{"name": p.name, "size": p.stat().st_size} for p in folder.iterdir() if p.is_file() and not p.name.startswith(".")]
+            except OSError:
+                return self.respond(503, {"error": "PC receive folder is unavailable; choose another folder in FlashBridge"})
             files.sort(key=lambda x: x["name"].casefold())
             return self.respond(200, {"files": files})
         if path.startswith("/v1/hash/"):
@@ -238,7 +244,8 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "-1"))
             if size < 0 or size > MAX_FILE:
                 return self.respond(400, {"error": "Invalid file size"})
-            temp_dir = self.state.folder / ".flashbridge-partials"
+            folder = self.state.folder
+            temp_dir = folder / ".flashbridge-partials"
             temp_dir.mkdir(exist_ok=True)
             temporary = temp_dir / (secrets.token_hex(16) + ".part")
             remaining = size
@@ -259,11 +266,11 @@ class Handler(BaseHTTPRequestHandler):
                 output.flush()
                 os.fsync(output.fileno())
             with self.state.lock:
-                existing = self.state.folder / name
+                existing = folder / name
                 if existing.is_file() and not existing.is_symlink() and existing.stat().st_size == size and file_hash(existing) == digest.hexdigest():
                     self.state.on_event(f"Already have {name}")
                     return self.respond(201, {"name": name, "size": size, "skipped": True})
-                destination = unique_path(self.state.folder, name)
+                destination = unique_path(folder, name)
                 temporary.rename(destination)
             self.state.on_event(f"Received {destination.name}")
             self.respond(201, {"name": destination.name, "size": size})
