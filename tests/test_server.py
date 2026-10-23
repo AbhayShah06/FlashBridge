@@ -43,12 +43,16 @@ class TransferTest(unittest.TestCase):
         self.assertEqual(self.request("GET", "/v1/files", token="wrong")[0], 401)
         payload = b"abc" * 300000
         self.assertEqual(self.request("PUT", "/v1/files?name=test.bin", payload)[0], 201)
-        self.assertEqual(self.request("PUT", "/v1/files?name=test.bin", payload)[0], 201)
+        status, body = self.request("PUT", "/v1/files?name=test.bin", payload)
+        self.assertEqual(status, 201)
+        self.assertTrue(json.loads(body)["skipped"])
+        self.assertEqual(self.request("PUT", "/v1/files?name=test.bin", b"changed")[0], 201)
         self.assertEqual((self.folder / "test.bin").read_bytes(), payload)
-        self.assertEqual((self.folder / "test (2).bin").read_bytes(), payload)
+        self.assertEqual((self.folder / "test (2).bin").read_bytes(), b"changed")
         listing = json.loads(self.request("GET", "/v1/files")[1])["files"]
         self.assertEqual([item["name"] for item in listing], ["test (2).bin", "test.bin"])
         self.assertEqual(self.request("GET", "/v1/files/test.bin"), (200, payload))
+        self.assertEqual(json.loads(self.request("GET", "/v1/hash/test.bin")[1])["sha256"], __import__("hashlib").sha256(payload).hexdigest())
 
     def test_interrupted_upload_is_not_published(self):
         sock = socket.create_connection(("127.0.0.1", self.port), timeout=4)

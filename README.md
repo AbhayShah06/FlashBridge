@@ -10,15 +10,17 @@ Small, local Android ↔ Windows file transfer. Files stay on the local connecti
 4. Allow FlashBridge through Windows Firewall for **private networks** if Windows asks.
 5. The Android app finds the Windows app automatically. Enter the six-digit code shown on Windows once.
 
-On Android, **Send file** picks any file and sends it to the Windows receive folder. **Get from PC** lists files in the Windows receive folder and saves the chosen file to the Android receive folder. On Windows, **Add file to folder** makes a file available for Android to fetch. Both directions use the same private local connection.
+On Android, **Send file** picks any file and sends it to the Windows receive folder. **Get from PC** lists files in the Windows receive folder and saves the chosen file to the Android receive folder. On Windows, **Add file to folder** makes a file available for Android to fetch. Both directions use the same private local connection. The Android transfer continues with the screen off and shows progress in a notification.
 
-The Windows installer includes an uninstaller in Windows Settings. Uninstalling the program leaves your transfer folder and files alone.
+The Windows installer includes an uninstaller in **Windows Settings → Installed apps → FlashBridge → Uninstall**. Uninstalling the program leaves your transfer folder and files alone. The installer is per-user and does not modify system power or firewall settings.
+
+Both apps check the GitHub release on opening. When a newer version exists, **Update now** downloads the release, checks its SHA-256 hash, and starts the platform installer. Android still requires the system's installation confirmation. Windows closes the app before running its installer. Updates do not touch transfer folders.
 
 ## Limits and design
 
-- Both apps must be open during a transfer. The Android app does not run a background transfer service.
+- Keep the Windows app running. The Android app uses a foreground transfer service and temporary CPU/Wi-Fi locks during a transfer, so the phone screen may turn off. Extremely restrictive vendor battery policies can still interrupt it.
 - The connection uses plain HTTP on the local network, authenticated with a random pairing token. Use a private hotspot or trusted local network; traffic is not encrypted at the app layer.
-- The apps never overwrite a completed file. An incoming duplicate gets a numbered name. Incomplete Windows uploads stay in a hidden `.flashbridge-partials` directory; Android removes an incomplete destination document after a failed download.
+- The apps never overwrite a completed file. Re-sending the same named content is skipped. Different content with the same name gets a numbered name. Incomplete Windows uploads stay in the app-created `.flashbridge-partials` directory; Android removes an incomplete destination document after a failed download.
 - Transfer speed depends on the phone and PC radio, signal, storage, and network. The app streams in 256 KiB chunks and does not relay files through the internet.
 
 ## Build

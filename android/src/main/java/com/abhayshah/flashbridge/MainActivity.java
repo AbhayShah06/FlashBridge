@@ -6,6 +6,9 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.database.Cursor;
 import android.content.ContentResolver;
@@ -15,6 +18,8 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import androidx.documentfile.provider.DocumentFile;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -42,6 +47,14 @@ public class MainActivity extends Activity {
     private Button send, receive;
     private volatile boolean running = true;
     private volatile String discoveredHost = "";
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Runnable statusPoll = new Runnable() {
+        @Override public void run() {
+            String value = prefs.getString("status", "");
+            if (!value.isEmpty() && !value.equals(status.getText().toString())) status.setText(value);
+            mainHandler.postDelayed(this, 500);
+        }
+    };
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -67,6 +80,10 @@ public class MainActivity extends Activity {
         body.addView(status);
         refresh();
         startDiscovery();
+        UpdateManager.check(this, body);
+        mainHandler.post(statusPoll);
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 90);
     }
 
     private TextView label(String text, int size) {
@@ -99,7 +116,10 @@ public class MainActivity extends Activity {
         return value.isEmpty() ? null : Uri.parse(value);
     }
 
-    private void setStatus(String message) { runOnUiThread(() -> status.setText(message)); }
+    private void setStatus(String message) {
+        prefs.edit().putString("status", message).apply();
+        runOnUiThread(() -> status.setText(message));
+    }
 
     private void startDiscovery() {
         Thread thread = new Thread(() -> {
@@ -138,10 +158,10 @@ public class MainActivity extends Activity {
         pin.setSingleLine(true);
         pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         form.addView(pin);
-        new AlertDialog.Builder(this).setTitle("Pair with Windows")
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Pair with Windows")
                 .setMessage("Both devices must be on the same network. A phone hotspot works without internet.")
                 .setView(form).setNegativeButton("Cancel", null)
-                .setPositiveButton("Pair", (dialog, which) -> {
+                .setPositiveButton("Pair", (whichDialog, which) -> {
                     String host = address.getText().toString().trim();
                     String code = pin.getText().toString().trim();
                     if (!host.matches("[0-9a-zA-Z.:-]{2,255}") || !code.matches("[0-9]{6}")) {
@@ -149,6 +169,7 @@ public class MainActivity extends Activity {
                     }
                     io.execute(() -> pair(host, code));
                 }).show();
+        installSwipeBack(dialog.findViewById(android.R.id.content), dialog::dismiss);
     }
 
     private HttpURLConnection connection(String host, String path, String method, boolean authenticated) throws Exception {
@@ -210,44 +231,20 @@ public class MainActivity extends Activity {
             getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             prefs.edit().putString("folder", uri.toString()).apply();
             refresh();
-        } else if (request == CHOOSE_FILE) io.execute(() -> upload(uri));
+        } else if (request == CHOOSE_FILE) startSend(uri);
     }
 
-    private void upload(Uri uri) {
-        HttpURLConnection c = null;
-        try {
-            ContentResolver resolver = getContentResolver();
-            String name = "file"; long size = -1;
-            try (Cursor cursor = resolver.query(uri, new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}, null, null, null)) {
-                if (cursor != null && cursor.moveToFirst()) {
-                    name = cursor.getString(0);
-                    if (!cursor.isNull(1)) size = cursor.getLong(1);
-                }
-            }
-            if (size < 0) throw new Exception("The file provider did not give a size. Choose a local file.");
-            if (name == null || name.isEmpty()) name = "file";
-            c = connection(prefs.getString("host", ""), "/v1/files?name=" + Uri.encode(name), "PUT", true);
-            c.setDoOutput(true);
-            c.setFixedLengthStreamingMode(size);
-            final long total = size;
-            setStatus("Sending " + name + "… 0%");
-            try (InputStream in = resolver.openInputStream(uri); OutputStream out = c.getOutputStream()) {
-                if (in == null) throw new Exception("Cannot open file");
-                byte[] buf = new byte[256 * 1024]; long done = 0; int n; int last = -1;
-                while ((n = in.read(buf)) != -1) {
-                    out.write(buf, 0, n); done += n;
-                    int percent = total == 0 ? 100 : (int)(done * 100 / total);
-                    if (percent != last) { last = percent; setStatus("Sending " + name + "… " + percent + "%"); }
-                }
-                if (done != size) throw new Exception("The source file changed during transfer");
-            }
-            if (c.getResponseCode() != 201) throw new Exception("PC rejected the file (HTTP " + c.getResponseCode() + ")");
-            JSONObject result = new JSONObject(readAll(c.getInputStream()));
-            setStatus("Sent " + result.getString("name") + " to the PC folder.");
-        } catch (Exception e) { setStatus("Send failed: " + e.getMessage()); }
-        finally { if (c != null) c.disconnect(); }
+    private void startSend(Uri uri) {
+        try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+        catch (SecurityException ignored) {}
+        Intent task = new Intent(this, TransferService.class).setAction(TransferService.SEND).setData(uri);
+        startForegroundService(task);
     }
 
+    private void startReceive(String name) {
+        Intent task = new Intent(this, TransferService.class).setAction(TransferService.RECEIVE).putExtra("name", name);
+        startForegroundService(task);
+    }
     private void listRemote() {
         io.execute(() -> {
             HttpURLConnection c = null;
@@ -259,55 +256,35 @@ public class MainActivity extends Activity {
                 for (int i = 0; i < items.length(); i++) names.add(items.getJSONObject(i).getString("name"));
                 runOnUiThread(() -> {
                     if (names.isEmpty()) { setStatus("No files in the PC transfer folder yet."); return; }
-                    new AlertDialog.Builder(this).setTitle("Get from PC")
-                            .setItems(names.toArray(new String[0]), (dialog, index) -> io.execute(() -> download(names.get(index))))
+                    AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Get from PC")
+                            .setItems(names.toArray(new String[0]), (whichDialog, index) -> startReceive(names.get(index)))
                             .setNegativeButton("Cancel", null).show();
+                    installSwipeBack(dialog.findViewById(android.R.id.content), dialog::dismiss);
                 });
             } catch (Exception e) { setStatus("Could not list PC files: " + e.getMessage()); }
             finally { if (c != null) c.disconnect(); }
         });
     }
 
-    private void download(String name) {
-        HttpURLConnection c = null;
-        DocumentFile created = null;
-        try {
-            Uri tree = folderUri();
-            if (tree == null) throw new Exception("Choose a receive folder first");
-            DocumentFile folder = DocumentFile.fromTreeUri(this, tree);
-            if (folder == null || !folder.canWrite()) throw new Exception("Receive folder is unavailable");
-            c = connection(prefs.getString("host", ""), "/v1/files/" + Uri.encode(name), "GET", true);
-            if (c.getResponseCode() != 200) throw new Exception("PC could not send file (HTTP " + c.getResponseCode() + ")");
-            long size = c.getContentLengthLong();
-            if (size < 0) throw new Exception("PC did not provide a file size");
-            String target = name; int index = 2;
-            int dot = name.lastIndexOf('.');
-            String stem = dot > 0 ? name.substring(0, dot) : name;
-            String ext = dot > 0 ? name.substring(dot) : "";
-            while (folder.findFile(target) != null) target = stem + " (" + index++ + ")" + ext;
-            created = folder.createFile("application/octet-stream", target);
-            if (created == null) throw new Exception("Could not create file in receive folder");
-            setStatus("Receiving " + target + "… 0%");
-            try (InputStream in = c.getInputStream(); OutputStream out = getContentResolver().openOutputStream(created.getUri(), "w")) {
-                if (out == null) throw new Exception("Could not write file");
-                byte[] buf = new byte[256 * 1024]; long done = 0; int n; int last = -1;
-                while ((n = in.read(buf)) != -1) {
-                    out.write(buf, 0, n); done += n;
-                    int percent = size == 0 ? 100 : (int)(done * 100 / size);
-                    if (percent != last) { last = percent; setStatus("Receiving " + target + "… " + percent + "%"); }
-                }
-                if (done != size) throw new Exception("Transfer interrupted after " + done + " of " + size + " bytes");
-                out.flush();
-            }
-            setStatus("Received " + target + " in your Android folder.");
-        } catch (Exception e) {
-            if (created != null) created.delete();
-            setStatus("Receive failed: " + e.getMessage());
-        } finally { if (c != null) c.disconnect(); }
+    private void installSwipeBack(View view, Runnable dismiss) {
+        if (view == null || !(view.getParent() instanceof ViewGroup)) return;
+        ViewGroup parent = (ViewGroup) view.getParent();
+        int index = parent.indexOfChild(view);
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        parent.removeView(view);
+        SwipeDismissLayout swipe = new SwipeDismissLayout(this, dismiss);
+        swipe.addView(view, new FrameLayout.LayoutParams(-1, -1));
+        parent.addView(swipe, index, params);
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        UpdateManager.onResume(this);
     }
 
     @Override protected void onDestroy() {
         running = false;
+        mainHandler.removeCallbacks(statusPoll);
         io.shutdownNow();
         super.onDestroy();
     }
