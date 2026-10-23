@@ -1,0 +1,77 @@
+name: Build downloads
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore signing key
+        env:
+          KEY_B64: ${{ secrets.FLASHBRIDGE_KEYSTORE_B64 }}
+        run: printf '%s' "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/flashbridge.jks"
+      - name: Build APK
+        env:
+          FLASHBRIDGE_KEYSTORE: ${{ runner.temp }}/flashbridge.jks
+          FLASHBRIDGE_KEYSTORE_PASSWORD: ${{ secrets.FLASHBRIDGE_KEYSTORE_PASSWORD }}
+        run: bash ./gradlew :android:assembleRelease --no-daemon
+      - name: Name APK
+        run: cp android/build/outputs/apk/release/android-release.apk FlashBridge.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: FlashBridge.apk
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test transfers
+        run: python -m unittest discover -s tests -v
+      - name: Build portable EXE
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip pyinstaller==6.16.0
+          python -m PyInstaller --onefile --windowed --name FlashBridge --distpath dist windows/flashbridge.py
+      - name: Build installer
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe')) { choco install innosetup --no-progress -y }
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' installer\FlashBridge.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: |
+            dist/FlashBridge.exe
+            dist/FlashBridge-Setup.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          merge-multiple: true
+          path: release
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

@@ -1,0 +1,30 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.abhayshah.flashbridge'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.abhayshah.flashbridge'
+        minSdk 26
+        targetSdk 33
+        versionCode 1
+        versionName '0.1.0'
+    }
+    if (System.getenv('FLASHBRIDGE_KEYSTORE')) {
+        signingConfigs {
+            release {
+                storeFile file(System.getenv('FLASHBRIDGE_KEYSTORE'))
+                storePassword System.getenv('FLASHBRIDGE_KEYSTORE_PASSWORD')
+                keyAlias 'flashbridge'
+                keyPassword System.getenv('FLASHBRIDGE_KEYSTORE_PASSWORD')
+            }
+        }
+        buildTypes { release { signingConfig signingConfigs.release } }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies { implementation 'androidx.documentfile:documentfile:1.0.1' }

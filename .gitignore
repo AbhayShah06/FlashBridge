@@ -1,0 +1,10 @@
+.gradle/
+**/build/
+*.apk
+*.exe
+*.iss
+!installer/FlashBridge.iss
+__pycache__/
+.venv/
+dist/
+*.spec
