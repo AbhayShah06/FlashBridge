@@ -50,7 +50,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip pyinstaller==6.16.0
-          python -m PyInstaller --onefile --windowed --name FlashBridge --distpath dist windows/flashbridge.py
+          python -m PyInstaller --onefile --windowed --name FlashBridge --icon assets/flashbridge.ico --add-data "assets/flashbridge.ico;assets" --distpath dist windows/flashbridge.py
       - name: Build installer
         shell: pwsh
         run: |

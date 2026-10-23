@@ -1,5 +1,5 @@
 #define MyAppName "FlashBridge"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppExeName "FlashBridge.exe"
 
 [Setup]
@@ -17,6 +17,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\assets\flashbridge.ico
 CloseApplications=yes
 
 [Files]

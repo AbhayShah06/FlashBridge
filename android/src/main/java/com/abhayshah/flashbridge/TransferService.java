@@ -78,7 +78,7 @@ public class TransferService extends Service {
 
     private Notification notification(String message) {
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        return new Notification.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.stat_sys_upload)
+        return new Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_transfer)
                 .setContentTitle("FlashBridge").setContentText(message).setOnlyAlertOnce(true)
                 .setOngoing(true).setContentIntent(open).build();
     }

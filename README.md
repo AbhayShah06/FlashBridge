@@ -1,5 +1,7 @@
 # FlashBridge
 
+![FlashBridge logo](assets/flashbridge.svg)
+
 Small, local Android ↔ Windows file transfer. Files stay on the local connection. No account, cloud upload, or deletion of existing files.
 
 ## Install

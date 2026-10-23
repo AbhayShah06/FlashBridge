@@ -8,6 +8,7 @@ import secrets
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.parse
@@ -23,7 +24,7 @@ APP_DIR = Path(os.getenv("APPDATA", str(Path.home()))) / "FlashBridge"
 CONFIG_PATH = APP_DIR / "config.json"
 BUF = 256 * 1024
 MAX_FILE = 1 << 45
-VERSION = (0, 1, 0)
+VERSION = (0, 1, 1)
 UPDATE_MANIFEST = "https://github.com/AbhayShah06/FlashBridge/releases/latest/download/update.json"
 
 
@@ -319,6 +320,9 @@ def main():
     threading.Thread(target=advertise, args=(stop,), daemon=True).start()
 
     root = Tk()
+    icon = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "assets" / "flashbridge.ico"
+    if icon.is_file():
+        root.iconbitmap(default=str(icon))
     events = queue.Queue()
     root.title("FlashBridge")
     root.geometry("510x390")

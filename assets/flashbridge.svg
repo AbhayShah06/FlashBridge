@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FlashBridge bidirectional transfer mark">
+  <rect width="512" height="512" rx="112" fill="#11213b"/>
+  <path d="M108 204h238m-42-42 42 42-42 42" fill="none" stroke="#46dfdb" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M404 308H166m42-42-42 42 42 42" fill="none" stroke="#f6fbff" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
