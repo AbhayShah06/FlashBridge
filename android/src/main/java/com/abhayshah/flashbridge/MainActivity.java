@@ -3,6 +3,7 @@ package com.abhayshah.flashbridge;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -41,6 +42,8 @@ import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 
 public class MainActivity extends Activity {
     private static final int CHOOSE_FOLDER = 1;
@@ -97,6 +100,11 @@ public class MainActivity extends Activity {
         connectionCard.addView(cardTitle("CONNECTION"));
         hostLabel = label("", 16);
         connectionCard.addView(hostLabel);
+        button("Scan PC QR code", connectionCard, true, v -> new IntentIntegrator(this)
+                .setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+                .setPrompt("Scan the QR code in FlashBridge on Windows")
+                .setBeepEnabled(false).initiateScan());
+        button("Paste pairing link", connectionCard, false, v -> pastePairingLink());
         button("Pair with Windows", connectionCard, false, v -> showPair());
 
         LinearLayout filesCard = card(body);
@@ -246,6 +254,35 @@ public class MainActivity extends Activity {
         installSwipeBack(dialog.findViewById(android.R.id.content), dialog::dismiss);
     }
 
+    private void pastePairingLink() {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        String pasted = clipboard != null && clipboard.getPrimaryClip() != null
+                && clipboard.getPrimaryClip().getItemCount() > 0
+                ? clipboard.getPrimaryClip().getItemAt(0).coerceToText(this).toString() : "";
+        EditText input = new EditText(this);
+        input.setSingleLine(false);
+        input.setText(pasted);
+        input.setHint("Paste the link from Windows");
+        new AlertDialog.Builder(this).setTitle("Pairing link").setView(input)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Pair", (dialog, which) -> pairFromLink(input.getText().toString()))
+                .show();
+    }
+
+    private void pairFromLink(String link) {
+        Uri uri = Uri.parse(link.trim());
+        String host = uri.getQueryParameter("host");
+        String pin = uri.getQueryParameter("pin");
+        if (!"flashbridge".equals(uri.getScheme()) || !"pair".equals(uri.getHost())
+                || host == null || !host.matches("[0-9a-zA-Z.:-]{2,255}")
+                || pin == null || !pin.matches("[0-9]{6}")) {
+            setStatus("Invalid pairing link. Copy it again from the Windows app.");
+            return;
+        }
+        setStatus("Pairing with " + host + "…");
+        io.execute(() -> pair(host, pin));
+    }
+
     private HttpURLConnection connection(String host, String path, String method, boolean authenticated) throws Exception {
         URL url = new URL("http://" + host + ":" + PORT + path);
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
@@ -301,6 +338,11 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        IntentResult scan = IntentIntegrator.parseActivityResult(request, result, data);
+        if (scan != null) {
+            if (scan.getContents() != null) pairFromLink(scan.getContents());
+            return;
+        }
         if (result != RESULT_OK || data == null) return;
         if (request == CHOOSE_FOLDER) {
             Uri uri = data.getData();

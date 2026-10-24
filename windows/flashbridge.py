@@ -25,7 +25,7 @@ APP_DIR = Path(os.getenv("APPDATA", str(Path.home()))) / "FlashBridge"
 CONFIG_PATH = APP_DIR / "config.json"
 BUF = 256 * 1024
 MAX_FILE = 1 << 45
-VERSION = (0, 1, 3)
+VERSION = (0, 1, 4)
 UPDATE_MANIFEST = "https://github.com/AbhayShah06/FlashBridge/releases/latest/download/update.json"
 
 
@@ -362,99 +362,80 @@ def advertise(stop):
         sock.close()
 
 
-def addresses():
+def address_list():
     try:
         values = {x[4][0] for x in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)}
-        return ", ".join(sorted(x for x in values if not x.startswith("127."))) or "Connect to the same network"
+        return sorted(x for x in values if not x.startswith("127.") and not x.startswith("169.254."))
     except OSError:
-        return "Connect to the same network"
+        return []
+
+
+def addresses():
+    return ", ".join(address_list()) or "Connect to the same network"
+
+
+def pairing_link(host, pin):
+    return f"flashbridge://pair?host={urllib.parse.quote(host)}&pin={pin}"
 
 
 def main():
-    from tkinter import Tk, StringVar, filedialog, messagebox, ttk
+    import customtkinter as ctk
+    import qrcode
+    from PIL import Image
+    from tkinter import filedialog
+
+    ctk.set_appearance_mode("dark")
     state = State()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     server.daemon_threads = True
     server.state = state
     stop = threading.Event()
+    events = queue.Queue()
+    state.on_event = events.put
     threading.Thread(target=server.serve_forever, daemon=True).start()
     threading.Thread(target=advertise, args=(stop,), daemon=True).start()
 
-    root = Tk()
+    root = ctk.CTk(fg_color="#101316")
+    root.title("FlashBridge")
+    root.geometry("900x650")
+    root.minsize(760, 570)
     icon = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "assets" / "flashbridge.ico"
     if icon.is_file():
         root.iconbitmap(default=str(icon))
-    events = queue.Queue()
-    root.title("FlashBridge")
-    root.geometry("550x500")
-    root.minsize(490, 420)
-    root.configure(bg="#111214")
-    style = ttk.Style(root)
-    style.theme_use("clam")
-    style.configure("TFrame", background="#111214")
-    style.configure("Card.TFrame", background="#1D1F22")
-    style.configure("TLabel", background="#111214", foreground="#F4F5F2", font=("Segoe UI", 10))
-    style.configure("Card.TLabel", background="#1D1F22", foreground="#F4F5F2", font=("Segoe UI", 10))
-    style.configure("Muted.TLabel", background="#111214", foreground="#A7ABB0", font=("Segoe UI", 10))
-    style.configure("CardMuted.TLabel", background="#1D1F22", foreground="#A7ABB0", font=("Segoe UI", 10))
-    style.configure("Eyebrow.TLabel", background="#111214", foreground="#BEF264", font=("Segoe UI", 9, "bold"))
-    style.configure("Section.TLabel", background="#1D1F22", foreground="#BEF264", font=("Segoe UI", 9, "bold"))
-    style.configure("Title.TLabel", background="#111214", foreground="#F4F5F2", font=("Segoe UI", 23, "bold"))
-    style.configure("Code.TLabel", background="#1D1F22", foreground="#BEF264", font=("Segoe UI", 27, "bold"))
-    style.configure("TButton", background="#BEF264", foreground="#111214", borderwidth=0, padding=(14, 10), font=("Segoe UI", 10, "bold"))
-    style.map("TButton", background=[("active", "#D5FC90"), ("disabled", "#50584B")])
-    style.configure("Secondary.TButton", background="#2B2E31", foreground="#F4F5F2")
-    style.map("Secondary.TButton", background=[("active", "#3A3E42")])
-    frame = ttk.Frame(root, padding=22)
-    frame.pack(fill="both", expand=True)
-    ttk.Label(frame, text="LOCAL TRANSFER", style="Eyebrow.TLabel").pack(anchor="w")
-    ttk.Label(frame, text="FlashBridge", style="Title.TLabel").pack(anchor="w")
-    ttk.Label(frame, text="Your files, straight between devices.", style="Muted.TLabel").pack(anchor="w")
-    update_label = ttk.Label(frame, text="")
-    update_button = ttk.Button(frame, text="Update now")
+    if os.name == "nt":
+        try:
+            import ctypes
+            hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+            enabled = ctypes.c_int(1)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(enabled), 4)
+        except Exception:
+            pass
+
+    main_area = ctk.CTkScrollableFrame(root, fg_color="transparent", corner_radius=0)
+    main_area.pack(fill="both", expand=True)
+    content = ctk.CTkFrame(main_area, width=830, fg_color="transparent")
+    content.pack(fill="x", padx=28, pady=(26, 24))
+    content.grid_columnconfigure(0, weight=1, uniform="cards")
+    content.grid_columnconfigure(1, weight=1, uniform="cards")
+
+    header = ctk.CTkFrame(content, fg_color="transparent")
+    header.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 20))
+    brand = ctk.CTkFrame(header, width=50, height=50, corner_radius=15, fg_color="#C8F36C")
+    brand.pack(side="left", padx=(0, 14))
+    brand.pack_propagate(False)
+    ctk.CTkLabel(brand, text="↔", font=ctk.CTkFont(size=29, weight="bold"), text_color="#111713").pack(expand=True)
+    name_group = ctk.CTkFrame(header, fg_color="transparent")
+    name_group.pack(side="left")
+    ctk.CTkLabel(name_group, text="FlashBridge", font=ctk.CTkFont(size=26, weight="bold"), text_color="#F5F7F4").pack(anchor="w")
+    ctk.CTkLabel(name_group, text="Fast local transfers", font=ctk.CTkFont(size=13), text_color="#96A2A0").pack(anchor="w")
+    ctk.CTkLabel(header, text="WINDOWS  ·  v0.1.4", font=ctk.CTkFont(size=11, weight="bold"), text_color="#8C9995").pack(side="right", anchor="n", pady=10)
+
     update_data = [None]
-    connection_card = ttk.Frame(frame, style="Card.TFrame", padding=16)
-    connection_card.pack(fill="x", pady=(18, 8))
-    ttk.Label(connection_card, text="CONNECTION", style="Section.TLabel").pack(anchor="w")
-    ttk.Label(connection_card, text="Pairing code", style="CardMuted.TLabel").pack(anchor="w", pady=(7, 0))
-    ttk.Label(connection_card, text=state.pin, style="Code.TLabel").pack(anchor="w")
-    address_text = StringVar(value=f"PC address: {addresses()}  ·  port {PORT}")
-    ttk.Label(connection_card, textvariable=address_text, style="CardMuted.TLabel").pack(anchor="w")
-    files_card = ttk.Frame(frame, style="Card.TFrame", padding=16)
-    files_card.pack(fill="x", pady=(8, 8))
-    ttk.Label(files_card, text="FILES", style="Section.TLabel").pack(anchor="w")
-    folder_text = StringVar(value=f"Folder: {state.folder}")
-    folder_text_label = ttk.Label(files_card, textvariable=folder_text, style="CardMuted.TLabel", wraplength=460)
-    folder_text_label.pack(anchor="w")
-
-    def choose_folder():
-        chosen = filedialog.askdirectory(initialdir=str(state.folder), title="Choose transfer folder")
-        if chosen:
-            with state.lock:
-                state.folder = Path(chosen)
-                state.save()
-            folder_text.set(f"Folder: {state.folder}")
-
-    def add_file():
-        chosen = filedialog.askopenfilenames(title="Choose files for Android")
-        if chosen:
-            folder = state.folder
-            def copy_selected():
-                added, skipped, failed, last_error = add_files(chosen, folder, events.put, state.lock)
-                events.put(f"Ready for Android: {added} added, {skipped} already there, {failed} failed."
-                           + (f" Last error: {last_error}" if failed else " Tap Get from PC on Android."))
-            threading.Thread(target=copy_selected, daemon=True).start()
-
-    row = ttk.Frame(files_card, style="Card.TFrame")
-    row.pack(anchor="w", pady=12)
-    ttk.Button(row, text="Choose folder", style="Secondary.TButton", command=choose_folder).pack(side="left", padx=(0, 8))
-    ttk.Button(row, text="Add files to folder", command=add_file).pack(side="left")
-    status = StringVar(value="Waiting for Android. Keep this app open during transfers.")
-    progress_card = ttk.Frame(frame, style="Card.TFrame", padding=16)
-    progress_card.pack(fill="x", pady=(8, 0))
-    ttk.Label(progress_card, text="TRANSFER", style="Section.TLabel").pack(anchor="w")
-    ttk.Label(progress_card, textvariable=status, style="Card.TLabel", wraplength=460).pack(anchor="w", pady=(5, 0))
-    state.on_event = events.put
+    update_bar = ctk.CTkFrame(content, fg_color="#253326", corner_radius=14)
+    update_bar.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 16))
+    update_bar.grid_remove()
+    update_label = ctk.CTkLabel(update_bar, text="", font=ctk.CTkFont(size=14, weight="bold"), text_color="#EAF9D1")
+    update_label.pack(side="left", padx=16, pady=10)
 
     def install_update():
         if update_data[0] is None:
@@ -468,41 +449,144 @@ def main():
                 events.put(("error", friendly_error(error)))
         threading.Thread(target=work, daemon=True).start()
 
-    update_button.configure(command=install_update)
+    update_button = ctk.CTkButton(update_bar, text="Update now", width=115, height=34,
+                                  fg_color="#C8F36C", hover_color="#DBF9A4", text_color="#111713",
+                                  command=install_update)
+    update_button.pack(side="right", padx=12, pady=8)
+
+    connection = ctk.CTkFrame(content, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
+    connection.grid(row=2, column=0, sticky="nsew", padx=(0, 9))
+    files = ctk.CTkFrame(content, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
+    files.grid(row=2, column=1, sticky="nsew", padx=(9, 0))
+    ctk.CTkLabel(connection, text="01  CONNECT YOUR PHONE", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(20, 3))
+    ctk.CTkLabel(connection, text="Scan to pair", font=ctk.CTkFont(size=22, weight="bold"), text_color="#F5F7F4").pack(anchor="w", padx=22)
+    ctk.CTkLabel(connection, text="Open FlashBridge on Android and scan this code.", font=ctk.CTkFont(size=13), text_color="#A8B2AF").pack(anchor="w", padx=22, pady=(2, 10))
+    qr_label = ctk.CTkLabel(connection, text="", width=190, height=190, fg_color="#FFFFFF", corner_radius=10)
+    qr_label.pack(anchor="center", pady=(0, 10))
+    hosts = address_list()
+    selected_host = ctk.StringVar(value=hosts[0] if hosts else "No network address")
+    link_value = ctk.StringVar(value="")
+
+    def update_qr(_=None):
+        host = selected_host.get()
+        if host == "No network address":
+            qr_label.configure(image=None, text="Connect PC to a network")
+            link_value.set("")
+            return
+        link_value.set(pairing_link(host, state.pin))
+        qr = qrcode.QRCode(box_size=8, border=2, error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(pairing_link(host, state.pin))
+        qr.make(fit=True)
+        image = qr.make_image(fill_color="#10201B", back_color="#FFFFFF").get_image().convert("RGB")
+        qr_label.configure(image=ctk.CTkImage(light_image=image, dark_image=image, size=(190, 190)), text="")
+
+    update_qr()
+    ctk.CTkLabel(connection, text="PC address", font=ctk.CTkFont(size=12), text_color="#A8B2AF").pack(anchor="w", padx=22)
+    host_menu = ctk.CTkOptionMenu(connection, values=hosts or ["No network address"], variable=selected_host,
+                                  command=update_qr, height=34, fg_color="#303B3A", button_color="#40504A",
+                                  button_hover_color="#526A58", text_color="#F5F7F4")
+    host_menu.pack(fill="x", padx=22, pady=(4, 10))
+    ctk.CTkEntry(connection, textvariable=link_value, state="readonly", height=32,
+                 fg_color="#13191B", border_color="#303B3A", text_color="#B7C6BD").pack(fill="x", padx=22, pady=(0, 10))
+    code_row = ctk.CTkFrame(connection, fg_color="transparent")
+    code_row.pack(fill="x", padx=22, pady=(0, 10))
+    ctk.CTkLabel(code_row, text="Code", font=ctk.CTkFont(size=12), text_color="#A8B2AF").pack(side="left")
+    ctk.CTkLabel(code_row, text=state.pin, font=ctk.CTkFont(size=17, weight="bold"), text_color="#F5F7F4").pack(side="right")
+
+    def copy_link():
+        host = selected_host.get()
+        if host == "No network address":
+            status.configure(text="Connect the PC to Wi-Fi or your phone's hotspot first.")
+            return
+        root.clipboard_clear()
+        root.clipboard_append(pairing_link(host, state.pin))
+        status.configure(text="Pairing link copied. Paste it in FlashBridge on Android.")
+
+    ctk.CTkButton(connection, text="Copy pairing link", height=38, corner_radius=10,
+                  fg_color="#303B3A", hover_color="#40504A", text_color="#F5F7F4",
+                  command=copy_link).pack(fill="x", padx=22, pady=(0, 20))
+    ctk.CTkLabel(connection, text="QR pairs the devices. Transfers still need a reachable Wi-Fi or hotspot connection.",
+                 font=ctk.CTkFont(size=11), text_color="#8FA19A", wraplength=340,
+                 justify="left").pack(anchor="w", padx=22, pady=(0, 18))
+
+    ctk.CTkLabel(files, text="02  CHOOSE FILES", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(20, 3))
+    ctk.CTkLabel(files, text="Ready to send", font=ctk.CTkFont(size=22, weight="bold"), text_color="#F5F7F4").pack(anchor="w", padx=22)
+    ctk.CTkLabel(files, text="Add multiple files, then tap Get from PC on Android.",
+                 font=ctk.CTkFont(size=13), text_color="#A8B2AF", wraplength=335,
+                 justify="left").pack(anchor="w", padx=22, pady=(2, 22))
+    ctk.CTkLabel(files, text="TRANSFER FOLDER", font=ctk.CTkFont(size=11, weight="bold"), text_color="#8FA19A").pack(anchor="w", padx=22)
+    folder_text = ctk.CTkLabel(files, text=str(state.folder), font=ctk.CTkFont(size=13),
+                               text_color="#E2E9E4", wraplength=330, justify="left")
+    folder_text.pack(anchor="w", padx=22, pady=(5, 18))
+
+    def choose_folder():
+        chosen = filedialog.askdirectory(initialdir=str(state.folder), title="Choose transfer folder")
+        if chosen:
+            with state.lock:
+                state.folder = Path(chosen)
+                state.save()
+            folder_text.configure(text=str(state.folder))
+
+    def add_file():
+        chosen = filedialog.askopenfilenames(title="Choose files for Android")
+        if chosen:
+            folder = state.folder
+            def copy_selected():
+                added, skipped, failed, last_error = add_files(chosen, folder, events.put, state.lock)
+                events.put(f"Ready for Android: {added} added, {skipped} already there, {failed} failed."
+                           + (f" {last_error}" if failed else " Tap Get from PC on Android."))
+            threading.Thread(target=copy_selected, daemon=True).start()
+
+    ctk.CTkButton(files, text="Add files", command=add_file, height=48, corner_radius=11,
+                  fg_color="#C8F36C", hover_color="#DBF9A4", text_color="#111713",
+                  font=ctk.CTkFont(size=15, weight="bold")).pack(fill="x", padx=22, pady=(0, 10))
+    ctk.CTkButton(files, text="Change folder", command=choose_folder, height=40, corner_radius=10,
+                  fg_color="#303B3A", hover_color="#40504A", text_color="#F5F7F4").pack(fill="x", padx=22, pady=(0, 20))
+
+    activity = ctk.CTkFrame(content, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
+    activity.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+    ctk.CTkLabel(activity, text="ACTIVITY", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(16, 2))
+    status = ctk.CTkLabel(activity, text="Waiting for Android. Keep this app open during transfers.",
+                          font=ctk.CTkFont(size=14), text_color="#E2E9E4", wraplength=740, justify="left")
+    status.pack(anchor="w", padx=22, pady=(0, 18))
+
+    def close():
+        stop.set()
+        server.shutdown()
+        server.server_close()
+        root.destroy()
 
     def show_events():
         while not events.empty():
             event = events.get_nowait()
             if isinstance(event, tuple) and event[0] == "update":
                 update_data[0] = event[1]
-                update_label.configure(text=f"Update {event[1]['versionName']} available")
-                update_label.pack(anchor="w", before=connection_card)
-                update_button.pack(anchor="w", before=connection_card)
+                update_label.configure(text=f"Update {event[1]['versionName']} is ready")
+                update_bar.grid()
             elif isinstance(event, tuple) and event[0] == "install":
                 try:
                     subprocess.Popen([event[1]], cwd=str(Path(event[1]).parent))
                     close()
                     return
                 except OSError as error:
-                    status.set("Couldn't start the update installer. " + friendly_error(error))
+                    status.configure(text="Couldn't start the installer. " + friendly_error(error))
                     update_button.configure(state="normal", text="Retry update")
             elif isinstance(event, tuple) and event[0] == "error":
-                status.set(event[1])
+                status.configure(text=event[1])
                 update_button.configure(state="normal", text="Retry update")
-            elif isinstance(event, tuple) and event[0] == "ready":
-                status.set(event[1])
-                messagebox.showinfo("Ready", event[1])
             else:
-                status.set(event)
+                status.configure(text=str(event))
         root.after(200, show_events)
 
-    root.after(200, show_events)
-
-    def refresh_address():
-        address_text.set(f"PC address: {addresses()}  ·  port {PORT}")
-        root.after(2500, refresh_address)
-
-    root.after(2500, refresh_address)
+    def refresh_addresses():
+        current = address_list()
+        options = current or ["No network address"]
+        if list(host_menu.cget("values")) != options:
+            host_menu.configure(values=options)
+            if selected_host.get() not in options:
+                selected_host.set(options[0])
+                update_qr()
+        root.after(2500, refresh_addresses)
 
     def look_for_update():
         try:
@@ -512,15 +596,10 @@ def main():
         except Exception:
             pass
 
-    threading.Thread(target=look_for_update, daemon=True).start()
-
-    def close():
-        stop.set()
-        server.shutdown()
-        server.server_close()
-        root.destroy()
-
     root.protocol("WM_DELETE_WINDOW", close)
+    root.after(200, show_events)
+    root.after(2500, refresh_addresses)
+    threading.Thread(target=look_for_update, daemon=True).start()
     root.mainloop()
 
 

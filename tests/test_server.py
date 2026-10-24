@@ -10,10 +10,14 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
-from windows.flashbridge import Handler, add_files, safe_name, unique_path
+from windows.flashbridge import Handler, add_files, pairing_link, safe_name, unique_path
 
 
 class TransferTest(unittest.TestCase):
+    def test_pairing_link_contains_selected_address_and_code(self):
+        self.assertEqual(pairing_link("192.168.43.1", "123456"),
+                         "flashbridge://pair?host=192.168.43.1&pin=123456")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.folder = Path(self.temp.name)

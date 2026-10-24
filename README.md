@@ -16,6 +16,8 @@ On Android, **Send files to PC** selects multiple files and sends them one by on
 
 The Windows installer includes an uninstaller in **Windows Settings → Installed apps → FlashBridge → Uninstall**. Uninstalling the program leaves your transfer folder and files alone. The installer is per-user and does not modify system power or firewall settings.
 
+To pair, open both apps and tap **Scan PC QR code** on Android. You can also use **Copy pairing link** on Windows and **Paste pairing link** on Android, or enter the six-digit code and PC address manually. If Windows shows multiple PC addresses, select the one for your Wi-Fi or hotspot. The QR code contains the same address and temporary pairing code; it does not carry file data or bypass network isolation.
+
 Both apps check the GitHub release on opening. When a newer version exists, **Update now** downloads the release, checks its SHA-256 hash, and starts the platform installer. Android still requires the system's installation confirmation. Windows closes the app before running its installer. Updates do not touch transfer folders.
 
 ## Limits and design
@@ -29,6 +31,6 @@ Both apps check the GitHub release on opening. When a newer version exists, **Up
 
 Android: JDK 17, Android SDK 35, Gradle 8.9: `gradle :android:assembleDebug`.
 
-Windows: Python 3.11+: `pip install pyinstaller && pyinstaller --onefile --windowed --name FlashBridge windows/flashbridge.py`. Build the installer with Inno Setup 6 and `installer/FlashBridge.iss`.
+Windows: Python 3.11+: `pip install pyinstaller customtkinter "qrcode[pil]" && pyinstaller --onefile --windowed --name FlashBridge windows/flashbridge.py`. Build the installer with Inno Setup 6 and `installer/FlashBridge.iss`.
 
 GitHub Actions builds the APK and Windows installer and publishes them as release assets on a version tag.
