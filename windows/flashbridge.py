@@ -399,7 +399,7 @@ def main():
     root = ctk.CTk(fg_color="#101316")
     root.title("FlashBridge")
     root.geometry("1100x780")
-    root.minsize(1040, 720)
+    root.minsize(1100, 720)
     icon = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "assets" / "flashbridge.ico"
     if icon.is_file():
         root.iconbitmap(default=str(icon))
@@ -463,11 +463,11 @@ def main():
                                   command=install_update)
     update_button.pack(side="right", padx=12, pady=8)
 
-    connection = ctk.CTkFrame(content, width=800, height=400, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
-    connection.grid(row=2, column=0, padx=28)
+    connection = ctk.CTkFrame(content, width=1000, height=400, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
+    connection.grid(row=2, column=0, sticky="w", padx=28)
     connection.pack_propagate(False)
-    files = ctk.CTkFrame(content, width=800, height=300, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
-    files.grid(row=3, column=0, padx=28, pady=(16, 0))
+    files = ctk.CTkFrame(content, width=1000, height=300, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
+    files.grid(row=3, column=0, sticky="w", padx=28, pady=(16, 0))
     files.pack_propagate(False)
     ctk.CTkLabel(connection, text="01  CONNECT YOUR PHONE", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(20, 3))
     pairing_row = ctk.CTkFrame(connection, fg_color="transparent")
@@ -561,8 +561,8 @@ def main():
     ctk.CTkButton(files, text="Change folder", command=choose_folder, height=40, corner_radius=10,
                   fg_color="#303B3A", hover_color="#40504A", text_color="#F5F7F4").pack(fill="x", padx=22, pady=(0, 20))
 
-    activity = ctk.CTkFrame(content, width=800, height=95, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
-    activity.grid(row=4, column=0, padx=28, pady=(16, 24))
+    activity = ctk.CTkFrame(content, width=1000, height=95, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
+    activity.grid(row=4, column=0, sticky="w", padx=28, pady=(16, 24))
     activity.pack_propagate(False)
     ctk.CTkLabel(activity, text="ACTIVITY", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(16, 2))
     status = ctk.CTkLabel(activity, text="Waiting for Android. Keep this app open during transfers.",
