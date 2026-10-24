@@ -382,7 +382,7 @@ def main():
     import customtkinter as ctk
     import qrcode
     from PIL import Image
-    from tkinter import filedialog
+    from tkinter import Canvas, filedialog
 
     ctk.set_appearance_mode("dark")
     ctk.set_widget_scaling(0.8)
@@ -412,9 +412,19 @@ def main():
         except Exception:
             pass
 
-    main_area = ctk.CTkScrollableFrame(root, fg_color="transparent", corner_radius=0)
+    main_area = ctk.CTkFrame(root, fg_color="transparent", corner_radius=0)
     main_area.pack(fill="both", expand=True)
-    content = main_area
+    scrollbar = ctk.CTkScrollbar(main_area, fg_color="#101316")
+    scrollbar.pack(side="right", fill="y")
+    canvas = Canvas(main_area, bg="#101316", highlightthickness=0,
+                    yscrollcommand=scrollbar.set)
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.configure(command=canvas.yview)
+    content = ctk.CTkFrame(canvas, fg_color="transparent")
+    window_id = canvas.create_window((0, 0), window=content, anchor="nw")
+    canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window_id, width=event.width))
+    content.bind("<Configure>", lambda event: canvas.configure(scrollregion=canvas.bbox("all")))
+    root.bind("<MouseWheel>", lambda event: canvas.yview_scroll(-int(event.delta / 120), "units"))
     content.grid_columnconfigure(0, weight=1)
 
     header = ctk.CTkFrame(content, fg_color="transparent")
