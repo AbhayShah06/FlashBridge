@@ -1,5 +1,6 @@
 """Local file receiver and sender for FlashBridge. Standard library only."""
 import json
+import errno
 import hashlib
 import os
 import queue
@@ -26,6 +27,19 @@ BUF = 256 * 1024
 MAX_FILE = 1 << 45
 VERSION = (0, 1, 2)
 UPDATE_MANIFEST = "https://github.com/AbhayShah06/FlashBridge/releases/latest/download/update.json"
+
+
+def friendly_error(error):
+    if isinstance(error, OSError):
+        if error.errno == errno.ENOSPC:
+            return "Storage is full. Free up space in the transfer folder and try again."
+        if error.errno in (errno.EACCES, errno.EPERM):
+            return "File access denied. Choose another transfer folder or check its permissions."
+        if error.errno == errno.ENOENT:
+            return "A selected file or transfer folder is missing. Choose it again."
+    if isinstance(error, ValueError) and "checksum" in str(error).lower():
+        return "Update download was damaged. Try updating again."
+    return "That didn't work. Try again."
 
 
 def safe_name(value):
@@ -94,7 +108,7 @@ def add_files(paths, folder, progress, lock):
                 added += 1
         except OSError as error:
             failed += 1
-            last_error = str(error)
+            last_error = friendly_error(error)
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
@@ -324,8 +338,10 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(400, {"error": "Invalid upload"})
         except (OSError, ConnectionError) as exc:
             self.close_connection = True
+            self.state.on_event(f"Transfer stopped: {friendly_error(exc)}")
             try:
-                self.respond(500, {"error": str(exc)})
+                self.respond(507 if isinstance(exc, OSError) and exc.errno == errno.ENOSPC else 500,
+                             {"error": friendly_error(exc)})
             except OSError:
                 pass
         finally:
@@ -449,7 +465,7 @@ def main():
                 installer = download_update(update_data[0], events.put)
                 events.put(("install", str(installer)))
             except Exception as error:
-                events.put(("error", f"Update failed: {error}"))
+                events.put(("error", friendly_error(error)))
         threading.Thread(target=work, daemon=True).start()
 
     update_button.configure(command=install_update)
@@ -468,7 +484,7 @@ def main():
                     close()
                     return
                 except OSError as error:
-                    status.set(f"Could not start installer: {error}")
+                    status.set("Couldn't start the update installer. " + friendly_error(error))
                     update_button.configure(state="normal", text="Retry update")
             elif isinstance(event, tuple) and event[0] == "error":
                 status.set(event[1])

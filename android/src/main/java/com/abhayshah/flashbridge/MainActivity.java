@@ -258,13 +258,14 @@ public class MainActivity extends Activity {
             c.setRequestProperty("Content-Type", "application/json");
             c.setFixedLengthStreamingMode(bytes.length);
             try (OutputStream out = c.getOutputStream()) { out.write(bytes); }
-            if (c.getResponseCode() != 200) throw new Exception("Pairing failed. Check the code and PC address.");
+            int responseCode = c.getResponseCode();
+            if (responseCode != 200) throw new Exception(FriendlyErrors.forPairCode(responseCode));
             JSONObject response = new JSONObject(readAll(c.getInputStream()));
             String token = response.getString("token");
             prefs.edit().putString("host", host).putString("token", token).apply();
             setStatus("Paired. Choose a receive folder, then send or get files.");
             runOnUiThread(this::refresh);
-        } catch (Exception e) { setStatus(e.getMessage()); }
+        } catch (Exception e) { setStatus(FriendlyErrors.from(e)); }
         finally { if (c != null) c.disconnect(); }
     }
 
@@ -329,6 +330,7 @@ public class MainActivity extends Activity {
                 candidates.add(prefs.getString("discovered_host", ""));
                 candidates.add(prefs.getString("host", ""));
                 boolean unauthorized = false;
+                boolean unavailableFolder = false;
                 for (String host : candidates) {
                     if (host.isEmpty()) continue;
                     HttpURLConnection c = null;
@@ -338,6 +340,7 @@ public class MainActivity extends Activity {
                         c.setReadTimeout(5000);
                         int code = c.getResponseCode();
                         if (code == 401) { unauthorized = true; continue; }
+                        if (code == 503) { unavailableFolder = true; continue; }
                         if (code != 200) continue;
                         items = new JSONObject(readAll(c.getInputStream())).getJSONArray("files");
                         prefs.edit().putString("host", host).apply();
@@ -345,8 +348,8 @@ public class MainActivity extends Activity {
                     } catch (java.io.IOException ignored) { /* Try the other known PC address. */ }
                     finally { if (c != null) c.disconnect(); }
                 }
-                if (items == null) throw new Exception(unauthorized ? "PC found, but pairing expired. Pair with Windows again."
-                        : "Cannot reach PC. Connect laptop to phone hotspot, then Pair with Windows using its new PC address.");
+                if (items == null) throw new Exception(unavailableFolder ? FriendlyErrors.FOLDER : unauthorized
+                        ? "Pairing expired. Pair with Windows again." : FriendlyErrors.OFFLINE);
                 List<String> names = new ArrayList<>();
                 for (int i = 0; i < items.length(); i++) names.add(items.getJSONObject(i).getString("name"));
                 runOnUiThread(() -> {
@@ -362,7 +365,7 @@ public class MainActivity extends Activity {
                             }).show();
                     installSwipeBack(dialog.findViewById(android.R.id.content), dialog::dismiss);
                 });
-            } catch (Exception e) { setStatus("Could not list PC files: " + e.getMessage()); }
+            } catch (Exception e) { setStatus(FriendlyErrors.from(e)); }
         });
     }
 

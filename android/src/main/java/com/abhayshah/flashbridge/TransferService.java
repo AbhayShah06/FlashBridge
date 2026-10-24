@@ -69,7 +69,7 @@ public class TransferService extends Service {
                     wifi.acquire();
                 }
                 runBatch(intent);
-            } catch (Exception e) { update("Transfer failed: " + e.getMessage()); }
+            } catch (Exception e) { update(FriendlyErrors.from(e)); }
             finally {
                 if (wifi != null && wifi.isHeld()) wifi.release();
                 if (wake != null && wake.isHeld()) wake.release();
@@ -96,6 +96,7 @@ public class TransferService extends Service {
 
     private void resolveHost() throws Exception {
         boolean unauthorized = false;
+        boolean unavailableFolder = false;
         for (int round = 0; round < 3; round++) {
             LinkedHashSet<String> candidates = new LinkedHashSet<>();
             candidates.add(prefs.getString("discovered_host", ""));
@@ -114,13 +115,15 @@ public class TransferService extends Service {
                         return;
                     }
                     if (code == 401) unauthorized = true;
+                    if (code == 503) unavailableFolder = true;
                 } catch (IOException ignored) { /* Try the other address or wait for the link. */ }
                 finally { if (c != null) c.disconnect(); }
             }
             if (round < 2) Thread.sleep((round + 1) * 1000L);
         }
-        if (unauthorized) throw new Exception("PC found, but pairing expired. Pair with Windows again.");
-        throw new IOException("Cannot reach PC. Connect laptop to phone hotspot, then Pair with Windows using its new PC address.");
+        if (unavailableFolder) throw new Exception(FriendlyErrors.FOLDER);
+        if (unauthorized) throw new Exception("Pairing expired. Pair with Windows again.");
+        throw new IOException(FriendlyErrors.OFFLINE);
     }
 
     private void runBatch(Intent intent) throws Exception {
@@ -155,12 +158,12 @@ public class TransferService extends Service {
                     completed++;
                 } catch (Exception retryError) {
                     failed++;
-                    lastError = retryError.getMessage();
+                    lastError = FriendlyErrors.from(retryError);
                     if (retryError instanceof IOException) break;
                 }
             } catch (Exception error) {
                 failed++;
-                lastError = error.getMessage();
+                lastError = FriendlyErrors.from(error);
             }
         }
         progressPrefix = "";
@@ -208,7 +211,8 @@ public class TransferService extends Service {
                 }
                 if (done != size) throw new Exception("The source file changed during transfer");
             }
-            if (c.getResponseCode() != 201) throw new Exception("PC rejected file (HTTP " + c.getResponseCode() + ")");
+            int code = c.getResponseCode();
+            if (code != 201) throw new Exception(FriendlyErrors.forTransferCode(code));
             String reply = readAll(c.getInputStream());
             update("Sent " + new JSONObject(reply).getString("name") + " to PC");
         } finally { c.disconnect(); }
@@ -236,7 +240,8 @@ public class TransferService extends Service {
         HttpURLConnection c = connection("/v1/files/" + Uri.encode(name), "GET");
         DocumentFile created = null;
         try {
-            if (c.getResponseCode() != 200) throw new Exception("PC could not send file (HTTP " + c.getResponseCode() + ")");
+            int code = c.getResponseCode();
+            if (code != 200) throw new Exception(FriendlyErrors.forTransferCode(code));
             long size = c.getContentLengthLong();
             if (size < 0) throw new Exception("PC did not provide a file size");
             String target = name; int index = 2;
