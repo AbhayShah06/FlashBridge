@@ -25,7 +25,7 @@ APP_DIR = Path(os.getenv("APPDATA", str(Path.home()))) / "FlashBridge"
 CONFIG_PATH = APP_DIR / "config.json"
 BUF = 256 * 1024
 MAX_FILE = 1 << 45
-VERSION = (0, 1, 4)
+VERSION = (0, 1, 5)
 UPDATE_MANIFEST = "https://github.com/AbhayShah06/FlashBridge/releases/latest/download/update.json"
 
 
@@ -397,8 +397,8 @@ def main():
 
     root = ctk.CTk(fg_color="#101316")
     root.title("FlashBridge")
-    root.geometry("900x650")
-    root.minsize(760, 570)
+    root.geometry("900x790")
+    root.minsize(760, 650)
     icon = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "assets" / "flashbridge.ico"
     if icon.is_file():
         root.iconbitmap(default=str(icon))
@@ -413,13 +413,12 @@ def main():
 
     main_area = ctk.CTkScrollableFrame(root, fg_color="transparent", corner_radius=0)
     main_area.pack(fill="both", expand=True)
-    content = ctk.CTkFrame(main_area, width=830, fg_color="transparent")
+    content = ctk.CTkFrame(main_area, fg_color="transparent")
     content.pack(fill="x", padx=28, pady=(26, 24))
-    content.grid_columnconfigure(0, weight=1, uniform="cards")
-    content.grid_columnconfigure(1, weight=1, uniform="cards")
+    content.grid_columnconfigure(0, weight=1)
 
     header = ctk.CTkFrame(content, fg_color="transparent")
-    header.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 20))
+    header.grid(row=0, column=0, sticky="ew", pady=(0, 20))
     brand = ctk.CTkFrame(header, width=50, height=50, corner_radius=15, fg_color="#C8F36C")
     brand.pack(side="left", padx=(0, 14))
     brand.pack_propagate(False)
@@ -428,11 +427,11 @@ def main():
     name_group.pack(side="left")
     ctk.CTkLabel(name_group, text="FlashBridge", font=ctk.CTkFont(size=26, weight="bold"), text_color="#F5F7F4").pack(anchor="w")
     ctk.CTkLabel(name_group, text="Fast local transfers", font=ctk.CTkFont(size=13), text_color="#96A2A0").pack(anchor="w")
-    ctk.CTkLabel(header, text="WINDOWS  ·  v0.1.4", font=ctk.CTkFont(size=11, weight="bold"), text_color="#8C9995").pack(side="right", anchor="n", pady=10)
+    ctk.CTkLabel(header, text="WINDOWS  ·  v0.1.5", font=ctk.CTkFont(size=11, weight="bold"), text_color="#8C9995").pack(side="right", anchor="n", pady=10)
 
     update_data = [None]
     update_bar = ctk.CTkFrame(content, fg_color="#253326", corner_radius=14)
-    update_bar.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 16))
+    update_bar.grid(row=1, column=0, sticky="ew", pady=(0, 16))
     update_bar.grid_remove()
     update_label = ctk.CTkLabel(update_bar, text="", font=ctk.CTkFont(size=14, weight="bold"), text_color="#EAF9D1")
     update_label.pack(side="left", padx=16, pady=10)
@@ -455,14 +454,20 @@ def main():
     update_button.pack(side="right", padx=12, pady=8)
 
     connection = ctk.CTkFrame(content, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
-    connection.grid(row=2, column=0, sticky="nsew", padx=(0, 9))
+    connection.grid(row=2, column=0, sticky="ew")
     files = ctk.CTkFrame(content, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
-    files.grid(row=2, column=1, sticky="nsew", padx=(9, 0))
+    files.grid(row=3, column=0, sticky="ew", pady=(16, 0))
     ctk.CTkLabel(connection, text="01  CONNECT YOUR PHONE", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(20, 3))
-    ctk.CTkLabel(connection, text="Scan to pair", font=ctk.CTkFont(size=22, weight="bold"), text_color="#F5F7F4").pack(anchor="w", padx=22)
-    ctk.CTkLabel(connection, text="Open FlashBridge on Android and scan this code.", font=ctk.CTkFont(size=13), text_color="#A8B2AF").pack(anchor="w", padx=22, pady=(2, 10))
-    qr_label = ctk.CTkLabel(connection, text="", width=190, height=190, fg_color="#FFFFFF", corner_radius=10)
-    qr_label.pack(anchor="center", pady=(0, 10))
+    pairing_row = ctk.CTkFrame(connection, fg_color="transparent")
+    pairing_row.pack(fill="x", padx=22, pady=(6, 20))
+    left_pair = ctk.CTkFrame(pairing_row, fg_color="transparent")
+    left_pair.pack(side="left", anchor="n", padx=(0, 22))
+    right_pair = ctk.CTkFrame(pairing_row, fg_color="transparent")
+    right_pair.pack(side="left", fill="both", expand=True)
+    qr_label = ctk.CTkLabel(left_pair, text="", width=190, height=190, fg_color="#FFFFFF", corner_radius=10)
+    qr_label.pack(anchor="n")
+    ctk.CTkLabel(right_pair, text="Scan to pair", font=ctk.CTkFont(size=22, weight="bold"), text_color="#F5F7F4").pack(anchor="w")
+    ctk.CTkLabel(right_pair, text="Open FlashBridge on Android and scan this code.", font=ctk.CTkFont(size=13), text_color="#A8B2AF", wraplength=330, justify="left").pack(anchor="w", pady=(2, 12))
     hosts = address_list()
     selected_host = ctk.StringVar(value=hosts[0] if hosts else "No network address")
     link_value = ctk.StringVar(value="")
@@ -481,15 +486,15 @@ def main():
         qr_label.configure(image=ctk.CTkImage(light_image=image, dark_image=image, size=(190, 190)), text="")
 
     update_qr()
-    ctk.CTkLabel(connection, text="PC address", font=ctk.CTkFont(size=12), text_color="#A8B2AF").pack(anchor="w", padx=22)
-    host_menu = ctk.CTkOptionMenu(connection, values=hosts or ["No network address"], variable=selected_host,
+    ctk.CTkLabel(right_pair, text="PC address", font=ctk.CTkFont(size=12), text_color="#A8B2AF").pack(anchor="w")
+    host_menu = ctk.CTkOptionMenu(right_pair, values=hosts or ["No network address"], variable=selected_host,
                                   command=update_qr, height=34, fg_color="#303B3A", button_color="#40504A",
                                   button_hover_color="#526A58", text_color="#F5F7F4")
-    host_menu.pack(fill="x", padx=22, pady=(4, 10))
-    ctk.CTkEntry(connection, textvariable=link_value, state="readonly", height=32,
-                 fg_color="#13191B", border_color="#303B3A", text_color="#B7C6BD").pack(fill="x", padx=22, pady=(0, 10))
-    code_row = ctk.CTkFrame(connection, fg_color="transparent")
-    code_row.pack(fill="x", padx=22, pady=(0, 10))
+    host_menu.pack(fill="x", pady=(4, 10))
+    ctk.CTkEntry(right_pair, textvariable=link_value, state="readonly", height=32,
+                 fg_color="#13191B", border_color="#303B3A", text_color="#B7C6BD").pack(fill="x", pady=(0, 10))
+    code_row = ctk.CTkFrame(right_pair, fg_color="transparent")
+    code_row.pack(fill="x", pady=(0, 10))
     ctk.CTkLabel(code_row, text="Code", font=ctk.CTkFont(size=12), text_color="#A8B2AF").pack(side="left")
     ctk.CTkLabel(code_row, text=state.pin, font=ctk.CTkFont(size=17, weight="bold"), text_color="#F5F7F4").pack(side="right")
 
@@ -502,12 +507,12 @@ def main():
         root.clipboard_append(pairing_link(host, state.pin))
         status.configure(text="Pairing link copied. Paste it in FlashBridge on Android.")
 
-    ctk.CTkButton(connection, text="Copy pairing link", height=38, corner_radius=10,
+    ctk.CTkButton(right_pair, text="Copy pairing link", height=38, corner_radius=10,
                   fg_color="#303B3A", hover_color="#40504A", text_color="#F5F7F4",
-                  command=copy_link).pack(fill="x", padx=22, pady=(0, 20))
-    ctk.CTkLabel(connection, text="QR pairs the devices. Transfers still need a reachable Wi-Fi or hotspot connection.",
-                 font=ctk.CTkFont(size=11), text_color="#8FA19A", wraplength=340,
-                 justify="left").pack(anchor="w", padx=22, pady=(0, 18))
+                  command=copy_link).pack(fill="x", pady=(0, 8))
+    ctk.CTkLabel(right_pair, text="QR pairing still needs reachable Wi-Fi or a hotspot.",
+                 font=ctk.CTkFont(size=11), text_color="#8FA19A", wraplength=330,
+                 justify="left").pack(anchor="w")
 
     ctk.CTkLabel(files, text="02  CHOOSE FILES", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(20, 3))
     ctk.CTkLabel(files, text="Ready to send", font=ctk.CTkFont(size=22, weight="bold"), text_color="#F5F7F4").pack(anchor="w", padx=22)
@@ -544,7 +549,7 @@ def main():
                   fg_color="#303B3A", hover_color="#40504A", text_color="#F5F7F4").pack(fill="x", padx=22, pady=(0, 20))
 
     activity = ctk.CTkFrame(content, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
-    activity.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+    activity.grid(row=4, column=0, sticky="ew", pady=(16, 0))
     ctk.CTkLabel(activity, text="ACTIVITY", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(16, 2))
     status = ctk.CTkLabel(activity, text="Waiting for Android. Keep this app open during transfers.",
                           font=ctk.CTkFont(size=14), text_color="#E2E9E4", wraplength=740, justify="left")
