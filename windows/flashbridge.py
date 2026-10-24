@@ -414,12 +414,11 @@ def main():
 
     main_area = ctk.CTkScrollableFrame(root, fg_color="transparent", corner_radius=0)
     main_area.pack(fill="both", expand=True)
-    content = ctk.CTkFrame(main_area, width=620, fg_color="transparent")
-    content.pack(fill="x", padx=28, pady=(26, 24))
+    content = main_area
     content.grid_columnconfigure(0, weight=1)
 
     header = ctk.CTkFrame(content, fg_color="transparent")
-    header.grid(row=0, column=0, sticky="ew", pady=(0, 20))
+    header.grid(row=0, column=0, sticky="ew", padx=28, pady=(26, 20))
     brand = ctk.CTkFrame(header, width=50, height=50, corner_radius=15, fg_color="#C8F36C")
     brand.pack(side="left", padx=(0, 14))
     brand.pack_propagate(False)
@@ -432,7 +431,7 @@ def main():
 
     update_data = [None]
     update_bar = ctk.CTkFrame(content, fg_color="#253326", corner_radius=14)
-    update_bar.grid(row=1, column=0, sticky="ew", pady=(0, 16))
+    update_bar.grid(row=1, column=0, sticky="ew", padx=28, pady=(0, 16))
     update_bar.grid_remove()
     update_label = ctk.CTkLabel(update_bar, text="", font=ctk.CTkFont(size=14, weight="bold"), text_color="#EAF9D1")
     update_label.pack(side="left", padx=16, pady=10)
@@ -455,9 +454,9 @@ def main():
     update_button.pack(side="right", padx=12, pady=8)
 
     connection = ctk.CTkFrame(content, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
-    connection.grid(row=2, column=0, sticky="ew")
+    connection.grid(row=2, column=0, sticky="ew", padx=28)
     files = ctk.CTkFrame(content, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
-    files.grid(row=3, column=0, sticky="ew", pady=(16, 0))
+    files.grid(row=3, column=0, sticky="ew", padx=28, pady=(16, 0))
     ctk.CTkLabel(connection, text="01  CONNECT YOUR PHONE", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(20, 3))
     pairing_row = ctk.CTkFrame(connection, fg_color="transparent")
     pairing_row.pack(fill="x", padx=22, pady=(6, 20))
@@ -550,7 +549,7 @@ def main():
                   fg_color="#303B3A", hover_color="#40504A", text_color="#F5F7F4").pack(fill="x", padx=22, pady=(0, 20))
 
     activity = ctk.CTkFrame(content, fg_color="#1B2023", corner_radius=18, border_width=1, border_color="#313B3D")
-    activity.grid(row=4, column=0, sticky="ew", pady=(16, 0))
+    activity.grid(row=4, column=0, sticky="ew", padx=28, pady=(16, 24))
     ctk.CTkLabel(activity, text="ACTIVITY", font=ctk.CTkFont(size=12, weight="bold"), text_color="#C8F36C").pack(anchor="w", padx=22, pady=(16, 2))
     status = ctk.CTkLabel(activity, text="Waiting for Android. Keep this app open during transfers.",
                           font=ctk.CTkFont(size=14), text_color="#E2E9E4", wraplength=740, justify="left")
