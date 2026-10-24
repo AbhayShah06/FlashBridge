@@ -25,7 +25,7 @@ APP_DIR = Path(os.getenv("APPDATA", str(Path.home()))) / "FlashBridge"
 CONFIG_PATH = APP_DIR / "config.json"
 BUF = 256 * 1024
 MAX_FILE = 1 << 45
-VERSION = (0, 1, 2)
+VERSION = (0, 1, 3)
 UPDATE_MANIFEST = "https://github.com/AbhayShah06/FlashBridge/releases/latest/download/update.json"
 
 

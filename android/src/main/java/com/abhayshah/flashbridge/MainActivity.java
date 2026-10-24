@@ -17,6 +17,7 @@ import android.provider.OpenableColumns;
 import android.database.Cursor;
 import android.content.ContentResolver;
 import android.view.View;
+import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -70,6 +71,13 @@ public class MainActivity extends Activity {
         body.setPadding(dp(20), dp(28), dp(20), dp(28));
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(Color.rgb(17, 18, 20));
+        scroll.setOnApplyWindowInsetsListener((view, insets) -> {
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                view.setPadding(0, bars.top, 0, bars.bottom);
+            }
+            return insets;
+        });
         scroll.addView(body);
         setContentView(scroll);
         TextView kicker = label("LOCAL TRANSFER", 12);

@@ -291,4 +291,9 @@ public class TransferService extends Service {
     }
 
     @Override public IBinder onBind(Intent intent) { return null; }
+
+    @Override public void onTimeout(int startId, int foregroundServiceType) {
+        update("Android paused this transfer after its background time limit. Open FlashBridge to send the remaining files.");
+        stopSelf(startId);
+    }
 }

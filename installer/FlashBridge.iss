@@ -1,5 +1,5 @@
 #define MyAppName "FlashBridge"
-#define MyAppVersion "0.1.2"
+#define MyAppVersion "0.1.3"
 #define MyAppExeName "FlashBridge.exe"
 
 [Setup]
