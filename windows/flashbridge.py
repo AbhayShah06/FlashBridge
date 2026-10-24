@@ -385,6 +385,7 @@ def main():
     from tkinter import filedialog
 
     ctk.set_appearance_mode("dark")
+    ctk.set_widget_scaling(0.8)
     state = State()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     server.daemon_threads = True
@@ -397,8 +398,8 @@ def main():
 
     root = ctk.CTk(fg_color="#101316")
     root.title("FlashBridge")
-    root.geometry("960x850")
-    root.minsize(900, 760)
+    root.geometry("1100x780")
+    root.minsize(1040, 720)
     icon = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "assets" / "flashbridge.ico"
     if icon.is_file():
         root.iconbitmap(default=str(icon))
